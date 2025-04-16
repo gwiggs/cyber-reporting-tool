@@ -1,0 +1,49 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      String   // "admin", "manager", "user"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships can be added here as the application grows
+  // e.g., tasks, team memberships, etc.
+}
+
+// Task model (to be expanded)
+model Task {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  status      String   // "not_started", "in_progress", "completed"
+  priority    String   // "low", "medium", "high"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Add relationships later
+}
+
+// Team model (to be expanded)
+model Team {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Add relationships later
+} 
