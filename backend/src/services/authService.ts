@@ -1,5 +1,4 @@
 import userModel from '../models/userModel';
-import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 import redisClient from '../db/redis';
 import { User, UserProfile, Permission } from '../types';
@@ -19,6 +18,7 @@ interface SessionData {
 
 const authService = {
   async authenticate(email: string, password: string): Promise<AuthResult> {
+    
     // Get user from database
     const user = await userModel.findByEmail(email);
     if (!user) {
@@ -35,16 +35,19 @@ const authService = {
     if (!credentials) {
       return { success: false, message: 'Invalid credentials' };
     }
-    
+    // Verify password using password service
+    const passwordService = (await import('./passwordService')).default;
     // Verify password
-    const isValid = await bcrypt.compare(password, credentials.password_hash);
-    if (!isValid) {
-      return { success: false, message: 'Invalid password' };
-    }
+    const isValid = await passwordService.verifyPassword(password, credentials.password_hash);
+       if (!isValid) {
+         return { success: false, message: 'Invalid password' };
+       }
     
     // Get user permissions
     const permissions = await userModel.getUserPermissions(user.id);
     
+       
+       
     // Update last login time
     // ... update code here
     

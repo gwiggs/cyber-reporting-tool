@@ -6,7 +6,7 @@ import cors from 'cors';
 // Import routes
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
-
+import roleRoutes from './routes/roleRoutes';
 // Initialize express
 const app = express();
 
@@ -23,6 +23,7 @@ app.use(cookieParser());
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/roles', roleRoutes);
 
 // Error handling middleware
 interface AppError extends Error {
