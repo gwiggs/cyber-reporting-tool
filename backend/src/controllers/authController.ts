@@ -52,7 +52,7 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
   try {
     // User is already attached to request by auth middleware
     if (!req.user) {
-      res.status(401).json({ message: 'Not authenticated' });
+      res.status(401).json({ message: 'Authentication required' });
       return;
     }
     

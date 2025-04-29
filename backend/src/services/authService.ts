@@ -1,6 +1,6 @@
 import userModel from '../models/userModel';
 import { v4 as uuidv4 } from 'uuid';
-import redisClient from '../db/redis';
+import redisClient from '../config/redis';
 import { User, UserProfile, Permission } from '../types';
 
 interface AuthResult {
@@ -18,7 +18,6 @@ interface SessionData {
 
 const authService = {
   async authenticate(email: string, password: string): Promise<AuthResult> {
-    
     // Get user from database
     const user = await userModel.findByEmail(email);
     if (!user) {
@@ -35,21 +34,16 @@ const authService = {
     if (!credentials) {
       return { success: false, message: 'Invalid credentials' };
     }
+    
     // Verify password using password service
     const passwordService = (await import('./passwordService')).default;
-    // Verify password
     const isValid = await passwordService.verifyPassword(password, credentials.password_hash);
-       if (!isValid) {
-         return { success: false, message: 'Invalid password' };
-       }
+    if (!isValid) {
+      return { success: false, message: 'Invalid credentials' };
+    }
     
     // Get user permissions
     const permissions = await userModel.getUserPermissions(user.id);
-    
-       
-       
-    // Update last login time
-    // ... update code here
     
     return {
       success: true,
@@ -75,14 +69,15 @@ const authService = {
     };
     
     // Store in Redis with 24-hour expiration
-    await redisClient.setAsync(`session:${sessionId}`, JSON.stringify(session));
-    await redisClient.expireAsync(`session:${sessionId}`, 24 * 60 * 60);
+    await redisClient.set(`session:${sessionId}`, JSON.stringify(session), {
+      EX: 24 * 60 * 60 // 24 hours in seconds
+    });
     
     return sessionId;
   },
   
   async validateSession(sessionId: string): Promise<SessionData | null> {
-    const sessionData = await redisClient.getAsync(`session:${sessionId}`);
+    const sessionData = await redisClient.get(`session:${sessionId}`);
     if (!sessionData) {
       return null;
     }
@@ -91,7 +86,7 @@ const authService = {
   },
   
   async destroySession(sessionId: string): Promise<boolean> {
-    await redisClient.delAsync(`session:${sessionId}`);
+    await redisClient.del(`session:${sessionId}`);
     return true;
   }
 };
