@@ -2,6 +2,23 @@ import { Request, Response } from 'express';
 import userModel from '../models/userModel';
 import passwordService from '../services/passwordService';
 import { CreateUserData, UpdateUserData } from '../types';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+
+// Rate limiter for password reset requests
+export const passwordResetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // Limit each IP to 3 requests per windowMs
+  message: 'Too many password reset requests, please try again later'
+});
+
+// Password validation schema
+const passwordSchema = z.string()
+  .min(8, 'Password must be at least 8 characters long')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+  .regex(/[0-9]/, 'Password must contain at least one number')
+  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
 
 /**
  * Get all users
@@ -173,6 +190,19 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
       res.status(400).json({ message: 'Current and new password are required' });
       return;
     }
+
+    // Validate new password complexity
+    try {
+      passwordSchema.parse(newPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ 
+          message: 'Password does not meet complexity requirements',
+          errors: error.errors.map(err => err.message)
+        });
+        return;
+      }
+    }
     
     // Check if user exists
     const user = await userModel.findById(userId);
@@ -194,12 +224,24 @@ export const changePassword = async (req: Request, res: Response): Promise<void>
       res.status(401).json({ message: 'Current password is incorrect' });
       return;
     }
+
+    // Check if new password matches any of the last 5 passwords
+    const passwordHistory = await userModel.getPasswordHistory(userId, 5);
+    for (const oldHash of passwordHistory) {
+      if (await passwordService.verifyPassword(newPassword, oldHash)) {
+        res.status(400).json({ message: 'New password cannot be the same as any of your last 5 passwords' });
+        return;
+      }
+    }
     
     // Hash new password
     const newPasswordHash = await passwordService.hashPassword(newPassword);
     
-    // Update password
+    // Update password and add to history
     await userModel.updatePassword(userId, newPasswordHash);
+    
+    // Invalidate all sessions for this user
+    await userModel.invalidateSessions(userId);
     
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
@@ -225,6 +267,16 @@ export const requestPasswordReset = async (req: Request, res: Response): Promise
     if (!user) {
       // Always return success for security reasons even if user doesn't exist
       res.json({ message: 'If your email is registered, you will receive password reset instructions' });
+      return;
+    }
+
+    // Check if there's a recent reset request
+    const recentReset = await userModel.getRecentResetRequest(user.id);
+    if (recentReset && new Date(recentReset.password_reset_expires) > new Date()) {
+      res.status(429).json({ 
+        message: 'A password reset request was recently sent. Please check your email or try again later.',
+        expiresIn: Math.ceil((new Date(recentReset.password_reset_expires).getTime() - new Date().getTime()) / 1000)
+      });
       return;
     }
     
@@ -264,6 +316,19 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({ message: 'Token and new password are required' });
       return;
     }
+
+    // Validate new password complexity
+    try {
+      passwordSchema.parse(newPassword);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ 
+          message: 'Password does not meet complexity requirements',
+          errors: error.errors.map(err => err.message)
+        });
+        return;
+      }
+    }
     
     // Find user by reset token
     const user = await userModel.findByResetToken(token);
@@ -277,12 +342,22 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
       res.status(400).json({ message: 'Password reset token has expired' });
       return;
     }
+
+    // Check if new password matches any of the last 5 passwords
+    const passwordHistory = await userModel.getPasswordHistory(user.id, 5);
+    for (const oldHash of passwordHistory) {
+      if (await passwordService.verifyPassword(newPassword, oldHash)) {
+        res.status(400).json({ message: 'New password cannot be the same as any of your last 5 passwords' });
+        return;
+      }
+    }
     
     // Hash new password
     const newPasswordHash = await passwordService.hashPassword(newPassword);
     
-    // Update password and clear reset token
+    // Update password, clear reset token, and invalidate sessions
     await userModel.resetPassword(user.id, newPasswordHash);
+    await userModel.invalidateSessions(user.id);
     
     res.json({ message: 'Password has been reset successfully' });
   } catch (error) {

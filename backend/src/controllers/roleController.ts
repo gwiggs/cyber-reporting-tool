@@ -8,7 +8,7 @@ import { Role, Permission } from '../types';
  */
 export const getRoles = async (req: Request, res: Response): Promise<void> => {
   try {
-    const result = await db.query<Role>('SELECT * FROM roles ORDER BY name');
+    const result = await db.query<Role>('SELECT * FROM roles ORDER BY name', []);
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching roles:', error);
@@ -218,7 +218,7 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
     }
     
     // Check if all permission IDs exist
-    const allPermissions = await db.query<Permission>('SELECT id FROM permissions');
+    const allPermissions = await db.query<Permission>('SELECT id FROM permissions', []);
     const validPermissionIds = new Set(allPermissions.rows.map(p => p.id));
     
     const invalidIds = permissionIds.filter(id => !validPermissionIds.has(id));
@@ -266,7 +266,8 @@ export const updateRolePermissions = async (req: Request, res: Response): Promis
 export const getAllPermissions = async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await db.query<Permission>(
-      'SELECT * FROM permissions ORDER BY resource, action'
+      'SELECT * FROM permissions ORDER BY resource, action',
+      []
     );
     res.json(result.rows);
   } catch (error) {

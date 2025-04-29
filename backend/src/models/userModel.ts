@@ -276,6 +276,60 @@ const userModel = {
        WHERE user_id = $3`,
       [passwordHash, new Date(), userId]
     );
+  },
+
+  /**
+   * Get password history for a user
+   */
+  async getPasswordHistory(userId: number, limit: number): Promise<string[]> {
+    const result = await db.query<{ password_hash: string }>(
+      `SELECT password_hash 
+       FROM password_history 
+       WHERE user_id = $1 
+       ORDER BY created_at DESC 
+       LIMIT $2`,
+      [userId, limit]
+    );
+    return result.rows.map(row => row.password_hash);
+  },
+
+  /**
+   * Invalidate all sessions for a user
+   */
+  async invalidateSessions(userId: number): Promise<void> {
+    await db.query(
+      'UPDATE sessions SET is_valid = false WHERE user_id = $1',
+      [userId]
+    );
+  },
+
+  /**
+   * Get recent password reset request
+   */
+  async getRecentResetRequest(userId: number): Promise<{ password_reset_expires: Date } | null> {
+    const result = await db.query<{ password_reset_expires: Date }>(
+      `SELECT password_reset_expires 
+       FROM user_credentials 
+       WHERE user_id = $1 
+       AND password_reset_token IS NOT NULL 
+       AND password_reset_expires > NOW()`,
+      [userId]
+    );
+    return result.rows[0] || null;
+  },
+
+  /**
+   * Get user permissions
+   */
+  async getUserPermissions(userId: number): Promise<Permission[]> {
+    const result = await db.query<Permission>(
+      `SELECT p.* FROM permissions p
+       INNER JOIN role_permissions rp ON p.id = rp.permission_id
+       INNER JOIN users u ON rp.role_id = u.primary_role_id
+       WHERE u.id = $1`,
+      [userId]
+    );
+    return result.rows;
   }
 };
 export default userModel;
