@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "start": "node dist/server.js",
-    "dev": "nodemon src/server.ts",
+    "dev": "ts-node-dev --respawn src/server.ts",
     "build": "tsc",
     "test": "jest",
     "lint": "eslint . --ext .ts",
-    "migrate": "ts-node src/db/migrations/index.ts"
+    "db:migrate": "ts-node src/db/migrationRunner.ts",
+    "db:rollback": "ts-node src/db/migrationRunner.ts rollback"
   },
   "dependencies": {
     "@types/bcrypt": "^5.0.2",
