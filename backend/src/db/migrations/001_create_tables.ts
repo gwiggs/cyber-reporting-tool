@@ -111,6 +111,85 @@ export async function up(): Promise<void> {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- Qualifications table
+    CREATE TABLE IF NOT EXISTS qualifications (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        code VARCHAR(50) UNIQUE,
+        description TEXT,
+        category VARCHAR(100),
+        level INTEGER,
+        expiration_period INTEGER, -- In months, null if doesn't expire
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- User qualifications table
+    CREATE TABLE IF NOT EXISTS user_qualifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        qualification_id INTEGER NOT NULL REFERENCES qualifications(id) ON DELETE CASCADE,
+        date_acquired DATE NOT NULL,
+        expiration_date DATE,
+        status VARCHAR(50) NOT NULL DEFAULT 'active', -- active, expired, revoked, pending
+        issuing_authority VARCHAR(255),
+        certificate_number VARCHAR(100),
+        verification_document VARCHAR(255), -- file path/URL to uploaded certificate
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, qualification_id) -- Optional: prevent duplicates
+    );
+
+    -- Work roles table
+    CREATE TABLE IF NOT EXISTS work_roles (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        code VARCHAR(50) UNIQUE,
+        description TEXT,
+        department_id INTEGER REFERENCES departments(id),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- User work roles table
+    CREATE TABLE IF NOT EXISTS user_work_roles (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        work_role_id INTEGER NOT NULL REFERENCES work_roles(id) ON DELETE CASCADE,
+        primary_role BOOLEAN DEFAULT FALSE, -- Is this the user's primary work role
+        start_date DATE NOT NULL,
+        end_date DATE, -- Null for current assignments
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, work_role_id)
+    );
+
+    -- Qualification requirements table
+    CREATE TABLE IF NOT EXISTS qualification_requirements (
+        id SERIAL PRIMARY KEY,
+        work_role_id INTEGER NOT NULL REFERENCES work_roles(id) ON DELETE CASCADE,
+        qualification_id INTEGER NOT NULL REFERENCES qualifications(id) ON DELETE CASCADE,
+        is_required BOOLEAN DEFAULT TRUE, -- Required vs. recommended
+        priority INTEGER DEFAULT 0, -- Higher number = higher priority
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(work_role_id, qualification_id)
+    );
+
+    -- Qualification updates table
+    CREATE TABLE IF NOT EXISTS qualification_updates (
+        id SERIAL PRIMARY KEY,
+        user_qualification_id INTEGER NOT NULL REFERENCES user_qualifications(id) ON DELETE CASCADE,
+        updated_by_user_id INTEGER NOT NULL REFERENCES users(id),
+        previous_status VARCHAR(50),
+        new_status VARCHAR(50) NOT NULL,
+        previous_expiration_date DATE,
+        new_expiration_date DATE,
+        update_reason TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
   `;
   
   // Execute the schema SQL
@@ -120,6 +199,12 @@ export async function up(): Promise<void> {
 
 export async function down(): Promise<void> {
   const dropTablesSQL = `
+    DROP TABLE IF EXISTS qualification_updates;
+    DROP TABLE IF EXISTS qualification_requirements;
+    DROP TABLE IF EXISTS user_work_roles;
+    DROP TABLE IF EXISTS work_roles;
+    DROP TABLE IF EXISTS user_qualifications;
+    DROP TABLE IF EXISTS qualifications;
     DROP TABLE IF EXISTS sessions;
     DROP TABLE IF EXISTS audit_logs;
     DROP TABLE IF EXISTS user_roles;

@@ -18,7 +18,7 @@ const passwordSchema = z.string()
   .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
   .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
   .regex(/[0-9]/, 'Password must contain at least one number')
-  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
+  .regex(/[!@#$%^&*()_\-+=<>?]/, 'Password must contain at least one special character (!@#$%^&*()_-+=<>?)');
 
 /**
  * Get all users
@@ -363,5 +363,84 @@ export const resetPassword = async (req: Request, res: Response): Promise<void> 
   } catch (error) {
     console.error('Error resetting password:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * Register a new user (public endpoint)
+ */
+export const registerUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userData: CreateUserData = req.body;
+    
+    // Validate required fields
+    if (!userData.employee_id || !userData.first_name || !userData.last_name || 
+        !userData.email || !userData.primary_role_id || !userData.password) {
+      res.status(400).json({ 
+        success: false,
+        message: 'Missing required fields' 
+      });
+      return;
+    }
+    
+    // Check if user with same email or employee_id already exists
+    const existingUserByEmail = await userModel.findByEmail(userData.email);
+    if (existingUserByEmail) {
+      res.status(409).json({ 
+        success: false,
+        message: 'User with this email already exists' 
+      });
+      return;
+    }
+    
+    const existingUserByEmployeeId = await userModel.findByEmployeeId(userData.employee_id);
+    if (existingUserByEmployeeId) {
+      res.status(409).json({ 
+        success: false,
+        message: 'User with this employee ID already exists' 
+      });
+      return;
+    }
+    
+    // Create user
+    const newUser = await userModel.create(userData);
+    
+    // Remove sensitive data before returning
+    const { password, ...userWithoutPassword } = userData;
+    
+    res.status(201).json({
+      success: true,
+      user: newUser,
+      message: 'Registration successful'
+    });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error' 
+    });
+  }
+};
+
+/**
+ * Get all users with extended information for administrators
+ */
+export const getAllUsersAdmin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Get detailed user information including roles, departments, and organizations
+    const users = await userModel.findAllWithDetails();
+    
+    // Return users with full details
+    res.json({
+      success: true,
+      count: users.length,
+      data: users
+    });
+  } catch (error) {
+    console.error('Error fetching users for admin:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error while fetching user data'
+    });
   }
 };

@@ -1,37 +1,100 @@
+import express from 'express';
+import roleController from '../controllers/roleController';
+import { authenticate } from '../middleware/authMiddleware';
+import { authorize } from '../middleware/rbacMiddleware';
 
-import { Router } from 'express';
-import { 
-  getRoles, 
-  getRoleById, 
-  createRole, 
-  updateRole, 
-  deleteRole,
-  getRolePermissions,
-  updateRolePermissions,
-  getAllPermissions
-} from '../controllers/roleController';
-import { authenticate, checkPermission, checkRole } from '../middleware/authMiddleware';
+const router = express.Router();
 
-const router = Router();
+/**
+ * @route   GET /api/roles/public
+ * @desc    Get all roles (public endpoint for registration)
+ * @access  Public
+ */
+router.get('/public', roleController.getAllPublic);
 
-// All role routes should require authentication
-router.use(authenticate);
+/**
+ * @route   GET /api/roles
+ * @desc    Get all roles
+ * @access  Private (requires authentication)
+ */
+router.get('/', authenticate, roleController.getAll);
 
-// Only admin role can manage roles
-router.use(checkRole(['Admin']));
+/**
+ * @route   GET /api/roles/:id
+ * @desc    Get a role by ID
+ * @access  Private (requires authentication)
+ */
+router.get('/:id', authenticate, roleController.getById);
 
-// Role routes
-router.get('/', getRoles);
-router.get('/:id', getRoleById);
-router.post('/', createRole);
-router.put('/:id', updateRole);
-router.delete('/:id', deleteRole);
+/**
+ * @route   POST /api/roles
+ * @desc    Create a new role
+ * @access  Private (requires 'role:create' permission)
+ */
+router.post(
+  '/',
+  authenticate,
+  authorize('role:create'),
+  roleController.create
+);
 
-// Role permissions
-router.get('/:id/permissions', getRolePermissions);
-router.put('/:id/permissions', updateRolePermissions);
+/**
+ * @route   PUT /api/roles/:id
+ * @desc    Update a role
+ * @access  Private (requires 'role:update' permission)
+ */
+router.put(
+  '/:id',
+  authenticate,
+  authorize('role:update'),
+  roleController.update
+);
 
-// Get all permissions
-router.get('/permissions/all', getAllPermissions);
+/**
+ * @route   DELETE /api/roles/:id
+ * @desc    Delete a role
+ * @access  Private (requires 'role:delete' permission)
+ */
+router.delete(
+  '/:id',
+  authenticate,
+  authorize('role:delete'),
+  roleController.delete
+);
+
+/**
+ * @route   GET /api/roles/:id/permissions
+ * @desc    Get permissions for a role
+ * @access  Private (requires authentication)
+ */
+router.get(
+  '/:id/permissions',
+  authenticate,
+  roleController.getPermissions
+);
+
+/**
+ * @route   POST /api/roles/:id/permissions
+ * @desc    Add permission to a role
+ * @access  Private (requires 'role:update' permission)
+ */
+router.post(
+  '/:id/permissions',
+  authenticate,
+  authorize('role:update'),
+  roleController.addPermission
+);
+
+/**
+ * @route   DELETE /api/roles/:id/permissions/:permissionId
+ * @desc    Remove permission from a role
+ * @access  Private (requires 'role:update' permission)
+ */
+router.delete(
+  '/:id/permissions/:permissionId',
+  authenticate,
+  authorize('role:update'),
+  roleController.removePermission
+);
 
 export default router;

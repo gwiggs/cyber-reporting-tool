@@ -13,4 +13,9 @@ router.post('/logout', authenticate, authController.logout);
 // Get current user route
 router.get('/me', authenticate, authController.getCurrentUser);
 
+// Sessions management routes
+router.get('/sessions', authenticate, authController.getUserSessions);
+router.delete('/sessions/:id', authenticate, authController.invalidateSession);
+router.delete('/sessions', authenticate, authController.invalidateAllSessions);
+
 export default router;

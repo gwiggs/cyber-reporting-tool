@@ -8,7 +8,7 @@ interface CreateUserData {
   first_name: string;
   last_name: string;
   email: string;
-  organization_id?: number;
+  organisation_id?: number;
   department_id?: number;
   rank?: string;
   primary_role_id: number;
@@ -21,7 +21,7 @@ interface UpdateUserData {
   first_name?: string;
   last_name?: string;
   email?: string;
-  organization_id?: number;
+  organisation_id?: number;
   department_id?: number;
   rank?: string;
   primary_role_id?: number;
@@ -79,7 +79,7 @@ const userModel = {
           userData.first_name,
           userData.last_name,
           userData.email,
-          userData.organization_id || null,
+          userData.organisation_id || null,
           userData.department_id || null,
           userData.rank || null,
           userData.primary_role_id,
@@ -155,9 +155,9 @@ const userModel = {
       updateFields.push(`email = $${paramCount++}`);
       queryParams.push(userData.email);
     }
-    if (userData.organization_id !== undefined) {
+    if (userData.organisation_id !== undefined) {
       updateFields.push(`organisation_id = $${paramCount++}`);
-      queryParams.push(userData.organization_id);
+      queryParams.push(userData.organisation_id);
     }
     if (userData.department_id !== undefined) {
       updateFields.push(`department_id = $${paramCount++}`);
@@ -330,6 +330,68 @@ const userModel = {
       [userId]
     );
     return result.rows;
+  },
+
+  /**
+   * Find all users with detailed information (for admin)
+   */
+  async findAllWithDetails(): Promise<any[]> {
+    const result = await db.query(
+      `SELECT u.id, u.employee_id, u.first_name, u.last_name, u.email, 
+              u.rank, u.is_active, u.last_login, u.created_at, u.updated_at,
+              r.id as role_id, r.name as role_name, r.description as role_description,
+              d.id as department_id, d.name as department_name, d.department_code,
+              o.id as organisation_id, o.name as organisation_name
+       FROM users u
+       LEFT JOIN roles r ON u.primary_role_id = r.id
+       LEFT JOIN departments d ON u.department_id = d.id
+       LEFT JOIN organisations o ON u.organisation_id = o.id
+       ORDER BY u.last_name, u.first_name`,
+      []
+    );
+    
+    return result.rows.map(row => {
+      // Format the user data for a cleaner response
+      return {
+        id: row.id,
+        employee_id: row.employee_id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        email: row.email,
+        rank: row.rank,
+        is_active: row.is_active,
+        last_login: row.last_login,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        role: {
+          id: row.role_id,
+          name: row.role_name,
+          description: row.role_description
+        },
+        department: row.department_id ? {
+          id: row.department_id,
+          name: row.department_name,
+          code: row.department_code
+        } : null,
+        organisation: row.organisation_id ? {
+          id: row.organisation_id,
+          name: row.organisation_name
+        } : null
+      };
+    });
+  },
+
+  /**
+   * Update user's last login timestamp
+   */
+  async updateLastLogin(userId: number): Promise<void> {
+    await db.query(
+      `UPDATE users
+       SET last_login = NOW(),
+           updated_at = NOW()
+       WHERE id = $1`,
+      [userId]
+    );
   }
 };
 export default userModel;

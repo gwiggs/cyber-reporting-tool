@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import authService from '../services/authService';
 import userModel from '../models/userModel';
-import { User, UserProfile } from '../types';
+import { User, UserProfile, AuthenticatedRequest } from '../types';
 
 // Extend Express Request type to include user
 declare global {
@@ -13,48 +13,66 @@ declare global {
   }
 }
 
-export const authenticate = async (
-  req: Request, 
-  res: Response, 
-  next: NextFunction
-): Promise<void> => {
-  const sessionId = req.cookies.sessionId;
-  
-  if (!sessionId) {
-    res.status(401).json({ message: 'Authentication required' });
-    return;
+/**
+ * Middleware to authenticate user based on session cookie
+ */
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Get session ID from cookie
+    const sessionId = req.cookies?.sessionId;
+    
+    if (!sessionId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required',
+      });
+    }
+    
+    // Validate session
+    const session = await authService.validateSession(sessionId);
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired session',
+      });
+    }
+    
+    // Get user from database
+    const user = await userModel.findById(session.user_id);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+    
+    // Get user permissions
+    const permissions = await userModel.getUserPermissions(user.id);
+    
+    // Attach user to request
+    req.user = {
+      id: user.id,
+      employee_id: user.employee_id,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      role: (user as any).role_name || 'User',
+      permissions: permissions
+    };
+    
+    // Attach session ID to request
+    req.sessionId = sessionId;
+    
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(401).json({
+      success: false,
+      message: 'Authentication failed',
+    });
   }
-  
-  const session = await authService.validateSession(sessionId);
-  if (!session) {
-    res.status(401).json({ message: 'Invalid or expired session' });
-    return;
-  }
-  
-  // Get user data
-  const user = await userModel.findById(session.user_id);
-  if (!user) {
-    res.status(401).json({ message: 'User not found' });
-    return;
-  }
-  
-  // Get permissions
-  const permissions = await userModel.getUserPermissions(user.id);
-  
-  // Attach user to request object
-  req.user = {
-    id: user.id,
-    employee_id: user.employee_id,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    email: user.email,
-    role: (user as any).role_name,
-    permissions
-  };
-  
-  req.sessionId = sessionId;
-  next();
-};
+}
+
 /**
  * Middleware to check if a user has a specific role
  * @param roles Array of role names that have access
@@ -63,7 +81,7 @@ export const authenticate = async (
 export const checkRole = (roles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
-      res.status(401).json({ message: 'Authentication required' });
+      res.status(401).json({ success: false, message: 'Authentication required' });
       return;
     }
     
@@ -74,15 +92,17 @@ export const checkRole = (roles: string[]) => {
     }
     
     res.status(403).json({
+      success: false,
       message: 'Access denied',
       required: { roles }
     });
   };
 };
+
 export const checkPermission = (resource: string, action: string) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
-      res.status(401).json({ message: 'Authentication required' });
+      res.status(401).json({ success: false, message: 'Authentication required' });
       return;
     }
     
@@ -110,6 +130,7 @@ export const checkPermission = (resource: string, action: string) => {
     
     // If both methods fail, deny access
     res.status(403).json({ 
+      success: false,
       message: 'Permission denied',
       required: { resource, action } 
     });

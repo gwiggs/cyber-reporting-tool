@@ -8,12 +8,20 @@ import {
   changePassword,
   requestPasswordReset,
   resetPassword,
-  passwordResetLimiter
+  passwordResetLimiter,
+  registerUser,
+  getAllUsersAdmin
 } from '../controllers/userController';
 import { authenticate, checkPermission, checkRole } from '../middleware/authMiddleware';
 import { validatePasswordStrength, assignRandomPasswordIfNeeded } from '../middleware/passwordMiddleware';
 
 const router = Router();
+
+// Public registration route
+router.post('/register', validatePasswordStrength, registerUser);
+
+// Admin route to get all users with detailed information
+router.get('/admin/all', authenticate, checkRole(['Admin']), getAllUsersAdmin);
 
 // Get all users - requires 'users:read' permission
 router.get('/', authenticate, checkPermission('users', 'read'), getUsers);
